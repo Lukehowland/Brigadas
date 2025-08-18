@@ -1,0 +1,32 @@
+# Node modules (no subir dependencias)
+node_modules/
+
+# Build / producción
+dist/
+build/
+
+# Archivos de lock (opcional si quieres que se suba pnpm-lock.yaml)
+# pnpm-lock.yaml
+
+# Logs
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Configuración de entorno
+.env
+.env.local
+.env.*.local
+
+# IDE / Sistema
+.vscode/
+.idea/
+.DS_Store
+
+# Cache de pnpm
+.pnpm-store/
+
+# Otros archivos temporales
+*.tmp
+*.swp

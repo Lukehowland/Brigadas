@@ -1,0 +1,25 @@
+.container {
+  max-width: 1000px;
+  margin: auto;
+  padding: 1rem;
+  font-family: sans-serif;
+}
+
+.formulario label {
+  display: block;
+  margin-bottom: 1rem;
+}
+
+input, select, textarea {
+  width: 100%;
+  padding: 0.5rem;
+  margin-top: 0.2rem;
+}
+
+button {
+  padding: 0.5rem 1rem;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  cursor: pointer;
+}

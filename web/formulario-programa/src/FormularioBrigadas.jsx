@@ -52,7 +52,7 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
   }), []);
 
   // API Base URL (ajustar según tu configuración)
-  const API_BASE = 'http://localhost:3000/api'; // Cambiar por tu URL base
+  const API_BASE = 'http://34.176.72.242:8080/api'; // Cambiar por tu URL base
 
   // Funciones API
   const apiCall = async (endpoint, options = {}) => {

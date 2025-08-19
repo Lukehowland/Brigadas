@@ -4,5 +4,14 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://34.176.72.242:8080',
+        changeOrigin: true,
+        secure: false
+      }
+    }
+  },
   base: '/Brigadas/' // <- tu repo se llama Brigadas
 })

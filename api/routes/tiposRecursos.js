@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const db = require('../../../../Downloads/untitled333/db');
 
 /**
  * @swagger
@@ -86,7 +86,7 @@ router.get('/', async (req, res, next) => {
     }
 
     if (activo !== undefined) {
-      conditions.push(`activo = ${activo === 'true' ? 1 : 0}`);
+      conditions.push(`activo = ${activo === 'true' ? 'TRUE' : 'FALSE'}`);
     }
 
     if (conditions.length > 0) {
@@ -249,9 +249,9 @@ router.post('/', async (req, res, next) => {
     const params = [
       { value: categoria },
       { value: nombre },
-      { value: requiere_talla === true || requiere_talla === 1 ? 1 : 0 },
-      { value: requiere_cantidad === false || requiere_cantidad === 0 ? 0 : 1 },
-      { value: activo === false || activo === 0 ? 0 : 1 }
+      { value: ['true', true, 1, '1'].includes(requiere_talla) },
+      { value: !(['false', false, 0, '0'].includes(requiere_cantidad)) },
+      { value: !(['false', false, 0, '0'].includes(activo)) }
     ];
 
     const result = await db.query(query, params);
@@ -352,19 +352,19 @@ router.put('/:id', async (req, res, next) => {
 
     if (requiere_talla !== undefined) {
       updateQuery += `requiere_talla = @param${paramIndex}, `;
-      updateParams.push({ value: requiere_talla === true || requiere_talla === 1 ? 1 : 0 });
+      updateParams.push({ value: ['true', true, 1, '1'].includes(requiere_talla) });
       paramIndex++;
     }
 
     if (requiere_cantidad !== undefined) {
       updateQuery += `requiere_cantidad = @param${paramIndex}, `;
-      updateParams.push({ value: requiere_cantidad === true || requiere_cantidad === 1 ? 1 : 0 });
+      updateParams.push({ value: !(['false', false, 0, '0'].includes(requiere_cantidad)) });
       paramIndex++;
     }
 
     if (activo !== undefined) {
       updateQuery += `activo = @param${paramIndex}, `;
-      updateParams.push({ value: activo === true || activo === 1 ? 1 : 0 });
+      updateParams.push({ value: !(['false', false, 0, '0'].includes(activo)) });
       paramIndex++;
     }
 

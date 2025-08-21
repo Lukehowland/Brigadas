@@ -1,5 +1,25 @@
--- BASE DE DATOS SISTEMA BOMBEROS FORESTALES
--- Estructura completa para gestión de brigadas y recursos
+-- BASE DE DATOS SISTEMA BOMBEROS FORESTALES (PostgreSQL)
+-- Estructura completa migrada desde SQL Server a PostgreSQL
+-- Incluye tablas, constraints, índices/uniques, triggers y datos de ejemplo
+
+-- Opcional: limpiar objetos existentes para ejecución repetible
+DO $$
+BEGIN
+  EXECUTE 'DROP TABLE IF EXISTS inventario_rescate_animal CASCADE';
+  EXECUTE 'DROP TABLE IF EXISTS inventario_medicamentos CASCADE';
+  EXECUTE 'DROP TABLE IF EXISTS inventario_limpieza CASCADE';
+  EXECUTE 'DROP TABLE IF EXISTS inventario_campo CASCADE';
+  EXECUTE 'DROP TABLE IF EXISTS inventario_alimentacion CASCADE';
+  EXECUTE 'DROP TABLE IF EXISTS inventario_logistica CASCADE';
+  EXECUTE 'DROP TABLE IF EXISTS inventario_herramientas CASCADE';
+  EXECUTE 'DROP TABLE IF EXISTS inventario_epp CASCADE';
+  EXECUTE 'DROP TABLE IF EXISTS tipos_recursos CASCADE';
+  EXECUTE 'DROP TABLE IF EXISTS tallas CASCADE';
+  EXECUTE 'DROP TABLE IF EXISTS brigadas CASCADE';
+EXCEPTION WHEN others THEN
+  -- ignorar si no existen
+  NULL;
+END$$;
 
 -- ================================================
 -- TABLAS PRINCIPALES
@@ -7,15 +27,15 @@
 
 -- Tabla de Brigadas
 CREATE TABLE brigadas (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    nombre NVARCHAR(100) NOT NULL,
-    cantidad_bomberos_activos INT DEFAULT 0,
-    contacto_celular_comandante NVARCHAR(20),
-    encargado_logistica NVARCHAR(100),
-    contacto_celular_logistica NVARCHAR(20),
-    numero_emergencia_publico NVARCHAR(20),
-    created_at DATETIME DEFAULT GETDATE(),
-    updated_at DATETIME DEFAULT GETDATE()
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  nombre VARCHAR(100) NOT NULL,
+  cantidad_bomberos_activos INTEGER DEFAULT 0,
+  contacto_celular_comandante VARCHAR(20),
+  encargado_logistica VARCHAR(100),
+  contacto_celular_logistica VARCHAR(20),
+  numero_emergencia_publico VARCHAR(20),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ================================================
@@ -24,20 +44,20 @@ CREATE TABLE brigadas (
 
 -- Catálogo de Tallas
 CREATE TABLE tallas (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    codigo NVARCHAR(10) NOT NULL UNIQUE, -- XS, S, M, L, XL, XXL
-    descripcion NVARCHAR(20) NOT NULL,
-    numero_equivalente INT NULL -- Para botas: 37, 38, 39, etc.
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  codigo VARCHAR(10) NOT NULL UNIQUE, -- XS, S, M, L, XL, XXL
+  descripcion VARCHAR(20) NOT NULL,
+  numero_equivalente INTEGER NULL -- Para botas: 37, 38, 39, etc.
 );
 
 -- Tipos de Equipment/Recursos
 CREATE TABLE tipos_recursos (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    categoria NVARCHAR(50) NOT NULL, -- EPP, HERRAMIENTAS, LOGISTICA, etc.
-    nombre NVARCHAR(100) NOT NULL,
-    requiere_talla BIT DEFAULT 0,
-    requiere_cantidad BIT DEFAULT 1,
-    activo BIT DEFAULT 1
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  categoria VARCHAR(50) NOT NULL, -- EPP, HERRAMIENTAS, LOGISTICA, etc.
+  nombre VARCHAR(100) NOT NULL,
+  requiere_talla BOOLEAN DEFAULT FALSE,
+  requiere_cantidad BOOLEAN DEFAULT TRUE,
+  activo BOOLEAN DEFAULT TRUE
 );
 
 -- ================================================
@@ -46,226 +66,155 @@ CREATE TABLE tipos_recursos (
 
 -- Equipamiento EPP por Brigada
 CREATE TABLE inventario_epp (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    brigada_id INT NOT NULL,
-    tipo_recurso_id INT NOT NULL,
-    talla_id INT NULL,
-    cantidad INT DEFAULT 0,
-    observaciones NVARCHAR(MAX),
-    created_at DATETIME DEFAULT GETDATE(),
-    updated_at DATETIME DEFAULT GETDATE(),
-    CONSTRAINT FK_inventario_epp_brigada FOREIGN KEY (brigada_id) REFERENCES brigadas(id) ON DELETE CASCADE,
-    CONSTRAINT FK_inventario_epp_tipo_recurso FOREIGN KEY (tipo_recurso_id) REFERENCES tipos_recursos(id),
-    CONSTRAINT FK_inventario_epp_talla FOREIGN KEY (talla_id) REFERENCES tallas(id),
-    CONSTRAINT UQ_inventario_epp UNIQUE (brigada_id, tipo_recurso_id, talla_id)
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brigada_id INTEGER NOT NULL REFERENCES brigadas(id) ON DELETE CASCADE,
+  tipo_recurso_id INTEGER NOT NULL REFERENCES tipos_recursos(id),
+  talla_id INTEGER NULL REFERENCES tallas(id),
+  cantidad INTEGER DEFAULT 0,
+  observaciones TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Mantener unicidad similar a SQL Server (solo una fila con talla NULL por brigada+tipo)
+CREATE UNIQUE INDEX UQ_inventario_epp_not_null ON inventario_epp (brigada_id, tipo_recurso_id, talla_id) WHERE talla_id IS NOT NULL;
+CREATE UNIQUE INDEX UQ_inventario_epp_null ON inventario_epp (brigada_id, tipo_recurso_id) WHERE talla_id IS NULL;
 
 -- Herramientas por Brigada
 CREATE TABLE inventario_herramientas (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    brigada_id INT NOT NULL,
-    tipo_recurso_id INT NOT NULL,
-    cantidad INT DEFAULT 0,
-    observaciones NVARCHAR(MAX),
-    created_at DATETIME DEFAULT GETDATE(),
-    updated_at DATETIME DEFAULT GETDATE(),
-    CONSTRAINT FK_inventario_herramientas_brigada FOREIGN KEY (brigada_id) REFERENCES brigadas(id) ON DELETE CASCADE,
-    CONSTRAINT FK_inventario_herramientas_tipo_recurso FOREIGN KEY (tipo_recurso_id) REFERENCES tipos_recursos(id),
-    CONSTRAINT UQ_inventario_herramientas UNIQUE (brigada_id, tipo_recurso_id)
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brigada_id INTEGER NOT NULL REFERENCES brigadas(id) ON DELETE CASCADE,
+  tipo_recurso_id INTEGER NOT NULL REFERENCES tipos_recursos(id),
+  cantidad INTEGER DEFAULT 0,
+  observaciones TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT UQ_inventario_herramientas UNIQUE (brigada_id, tipo_recurso_id)
 );
 
 -- Logística: Repuestos Vehículos y Combustible
 CREATE TABLE inventario_logistica (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    brigada_id INT NOT NULL,
-    tipo_recurso_id INT NOT NULL,
-    cantidad DECIMAL(10,2) DEFAULT 0, -- Para combustibles en litros
-    monto_aproximado DECIMAL(10,2) DEFAULT 0,
-    observaciones NVARCHAR(MAX),
-    created_at DATETIME DEFAULT GETDATE(),
-    updated_at DATETIME DEFAULT GETDATE(),
-    CONSTRAINT FK_inventario_logistica_brigada FOREIGN KEY (brigada_id) REFERENCES brigadas(id) ON DELETE CASCADE,
-    CONSTRAINT FK_inventario_logistica_tipo_recurso FOREIGN KEY (tipo_recurso_id) REFERENCES tipos_recursos(id),
-    CONSTRAINT UQ_inventario_logistica UNIQUE (brigada_id, tipo_recurso_id)
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brigada_id INTEGER NOT NULL REFERENCES brigadas(id) ON DELETE CASCADE,
+  tipo_recurso_id INTEGER NOT NULL REFERENCES tipos_recursos(id),
+  cantidad NUMERIC(10,2) DEFAULT 0, -- Para combustibles en litros
+  monto_aproximado NUMERIC(10,2) DEFAULT 0,
+  observaciones TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT UQ_inventario_logistica UNIQUE (brigada_id, tipo_recurso_id)
 );
 
 -- Alimentación y Bebidas
 CREATE TABLE inventario_alimentacion (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    brigada_id INT NOT NULL,
-    tipo_recurso_id INT NOT NULL,
-    cantidad INT DEFAULT 0,
-    observaciones NVARCHAR(MAX),
-    created_at DATETIME DEFAULT GETDATE(),
-    updated_at DATETIME DEFAULT GETDATE(),
-    CONSTRAINT FK_inventario_alimentacion_brigada FOREIGN KEY (brigada_id) REFERENCES brigadas(id) ON DELETE CASCADE,
-    CONSTRAINT FK_inventario_alimentacion_tipo_recurso FOREIGN KEY (tipo_recurso_id) REFERENCES tipos_recursos(id),
-    CONSTRAINT UQ_inventario_alimentacion UNIQUE (brigada_id, tipo_recurso_id)
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brigada_id INTEGER NOT NULL REFERENCES brigadas(id) ON DELETE CASCADE,
+  tipo_recurso_id INTEGER NOT NULL REFERENCES tipos_recursos(id),
+  cantidad INTEGER DEFAULT 0,
+  observaciones TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT UQ_inventario_alimentacion UNIQUE (brigada_id, tipo_recurso_id)
 );
 
 -- Equipo de Campo (Camping/Sleeping)
 CREATE TABLE inventario_campo (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    brigada_id INT NOT NULL,
-    tipo_recurso_id INT NOT NULL,
-    cantidad INT DEFAULT 0,
-    observaciones NVARCHAR(MAX),
-    created_at DATETIME DEFAULT GETDATE(),
-    updated_at DATETIME DEFAULT GETDATE(),
-    CONSTRAINT FK_inventario_campo_brigada FOREIGN KEY (brigada_id) REFERENCES brigadas(id) ON DELETE CASCADE,
-    CONSTRAINT FK_inventario_campo_tipo_recurso FOREIGN KEY (tipo_recurso_id) REFERENCES tipos_recursos(id),
-    CONSTRAINT UQ_inventario_campo UNIQUE (brigada_id, tipo_recurso_id)
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brigada_id INTEGER NOT NULL REFERENCES brigadas(id) ON DELETE CASCADE,
+  tipo_recurso_id INTEGER NOT NULL REFERENCES tipos_recursos(id),
+  cantidad INTEGER DEFAULT 0,
+  observaciones TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT UQ_inventario_campo UNIQUE (brigada_id, tipo_recurso_id)
 );
 
 -- Productos de Limpieza Personal y General
 CREATE TABLE inventario_limpieza (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    brigada_id INT NOT NULL,
-    tipo_recurso_id INT NOT NULL,
-    cantidad INT DEFAULT 0,
-    observaciones NVARCHAR(MAX),
-    created_at DATETIME DEFAULT GETDATE(),
-    updated_at DATETIME DEFAULT GETDATE(),
-    CONSTRAINT FK_inventario_limpieza_brigada FOREIGN KEY (brigada_id) REFERENCES brigadas(id) ON DELETE CASCADE,
-    CONSTRAINT FK_inventario_limpieza_tipo_recurso FOREIGN KEY (tipo_recurso_id) REFERENCES tipos_recursos(id),
-    CONSTRAINT UQ_inventario_limpieza UNIQUE (brigada_id, tipo_recurso_id)
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brigada_id INTEGER NOT NULL REFERENCES brigadas(id) ON DELETE CASCADE,
+  tipo_recurso_id INTEGER NOT NULL REFERENCES tipos_recursos(id),
+  cantidad INTEGER DEFAULT 0,
+  observaciones TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT UQ_inventario_limpieza UNIQUE (brigada_id, tipo_recurso_id)
 );
 
 -- Medicamentos
 CREATE TABLE inventario_medicamentos (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    brigada_id INT NOT NULL,
-    tipo_recurso_id INT NOT NULL,
-    cantidad INT DEFAULT 0,
-    observaciones NVARCHAR(MAX),
-    created_at DATETIME DEFAULT GETDATE(),
-    updated_at DATETIME DEFAULT GETDATE(),
-    CONSTRAINT FK_inventario_medicamentos_brigada FOREIGN KEY (brigada_id) REFERENCES brigadas(id) ON DELETE CASCADE,
-    CONSTRAINT FK_inventario_medicamentos_tipo_recurso FOREIGN KEY (tipo_recurso_id) REFERENCES tipos_recursos(id),
-    CONSTRAINT UQ_inventario_medicamentos UNIQUE (brigada_id, tipo_recurso_id)
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brigada_id INTEGER NOT NULL REFERENCES brigadas(id) ON DELETE CASCADE,
+  tipo_recurso_id INTEGER NOT NULL REFERENCES tipos_recursos(id),
+  cantidad INTEGER DEFAULT 0,
+  observaciones TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT UQ_inventario_medicamentos UNIQUE (brigada_id, tipo_recurso_id)
 );
 
 -- Rescate Animal
 CREATE TABLE inventario_rescate_animal (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    brigada_id INT NOT NULL,
-    tipo_recurso_id INT NOT NULL,
-    cantidad INT DEFAULT 0,
-    observaciones NVARCHAR(MAX),
-    created_at DATETIME DEFAULT GETDATE(),
-    updated_at DATETIME DEFAULT GETDATE(),
-    CONSTRAINT FK_inventario_rescate_animal_brigada FOREIGN KEY (brigada_id) REFERENCES brigadas(id) ON DELETE CASCADE,
-    CONSTRAINT FK_inventario_rescate_animal_tipo_recurso FOREIGN KEY (tipo_recurso_id) REFERENCES tipos_recursos(id),
-    CONSTRAINT UQ_inventario_rescate_animal UNIQUE (brigada_id, tipo_recurso_id)
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brigada_id INTEGER NOT NULL REFERENCES brigadas(id) ON DELETE CASCADE,
+  tipo_recurso_id INTEGER NOT NULL REFERENCES tipos_recursos(id),
+  cantidad INTEGER DEFAULT 0,
+  observaciones TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT UQ_inventario_rescate_animal UNIQUE (brigada_id, tipo_recurso_id)
 );
 
--- Trigger para actualizar el campo updated_at en brigadas
+-- ================================================
+-- TRIGGERS (actualización automática de updated_at)
+-- ================================================
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at := NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TRIGGER trg_brigadas_update
-ON brigadas
-AFTER UPDATE
-AS
-BEGIN
-    UPDATE brigadas
-    SET updated_at = GETDATE()
-    FROM brigadas b
-    INNER JOIN inserted i ON b.id = i.id;
-END;
+BEFORE UPDATE ON brigadas
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Trigger para actualizar el campo updated_at en inventario_epp
 CREATE TRIGGER trg_inventario_epp_update
-ON inventario_epp
-AFTER UPDATE
-AS
-BEGIN
-    UPDATE inventario_epp
-    SET updated_at = GETDATE()
-    FROM inventario_epp ie
-    INNER JOIN inserted i ON ie.id = i.id;
-END;
+BEFORE UPDATE ON inventario_epp
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Trigger para actualizar el campo updated_at en inventario_herramientas
 CREATE TRIGGER trg_inventario_herramientas_update
-ON inventario_herramientas
-AFTER UPDATE
-AS
-BEGIN
-    UPDATE inventario_herramientas
-    SET updated_at = GETDATE()
-    FROM inventario_herramientas ih
-    INNER JOIN inserted i ON ih.id = i.id;
-END;
+BEFORE UPDATE ON inventario_herramientas
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Trigger para actualizar el campo updated_at en inventario_logistica
 CREATE TRIGGER trg_inventario_logistica_update
-ON inventario_logistica
-AFTER UPDATE
-AS
-BEGIN
-    UPDATE inventario_logistica
-    SET updated_at = GETDATE()
-    FROM inventario_logistica il
-    INNER JOIN inserted i ON il.id = i.id;
-END;
+BEFORE UPDATE ON inventario_logistica
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Trigger para actualizar el campo updated_at en inventario_alimentacion
 CREATE TRIGGER trg_inventario_alimentacion_update
-ON inventario_alimentacion
-AFTER UPDATE
-AS
-BEGIN
-    UPDATE inventario_alimentacion
-    SET updated_at = GETDATE()
-    FROM inventario_alimentacion ia
-    INNER JOIN inserted i ON ia.id = i.id;
-END;
+BEFORE UPDATE ON inventario_alimentacion
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Trigger para actualizar el campo updated_at en inventario_campo
 CREATE TRIGGER trg_inventario_campo_update
-ON inventario_campo
-AFTER UPDATE
-AS
-BEGIN
-    UPDATE inventario_campo
-    SET updated_at = GETDATE()
-    FROM inventario_campo ic
-    INNER JOIN inserted i ON ic.id = i.id;
-END;
+BEFORE UPDATE ON inventario_campo
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Trigger para actualizar el campo updated_at en inventario_limpieza
 CREATE TRIGGER trg_inventario_limpieza_update
-ON inventario_limpieza
-AFTER UPDATE
-AS
-BEGIN
-    UPDATE inventario_limpieza
-    SET updated_at = GETDATE()
-    FROM inventario_limpieza il
-    INNER JOIN inserted i ON il.id = i.id;
-END;
+BEFORE UPDATE ON inventario_limpieza
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Trigger para actualizar el campo updated_at en inventario_medicamentos
 CREATE TRIGGER trg_inventario_medicamentos_update
-ON inventario_medicamentos
-AFTER UPDATE
-AS
-BEGIN
-    UPDATE inventario_medicamentos
-    SET updated_at = GETDATE()
-    FROM inventario_medicamentos im
-    INNER JOIN inserted i ON im.id = i.id;
-END;
+BEFORE UPDATE ON inventario_medicamentos
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Trigger para actualizar el campo updated_at en inventario_rescate_animal
 CREATE TRIGGER trg_inventario_rescate_animal_update
-ON inventario_rescate_animal
-AFTER UPDATE
-AS
-BEGIN
-    UPDATE inventario_rescate_animal
-    SET updated_at = GETDATE()
-    FROM inventario_rescate_animal ira
-    INNER JOIN inserted i ON ira.id = i.id;
-END;
+BEFORE UPDATE ON inventario_rescate_animal
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ================================================
+-- DATOS DE EJEMPLO
+-- ================================================
 
 -- Insertar datos de ejemplo en tallas
 INSERT INTO tallas (codigo, descripcion, numero_equivalente) VALUES
@@ -286,63 +235,63 @@ INSERT INTO tallas (codigo, descripcion, numero_equivalente) VALUES
 ('44', 'Talla 44', 44),
 ('45', 'Talla 45', 45);
 
--- Insertar datos de ejemplo en tipos_recursos
+-- Insertar datos de ejemplo en tipos_recursos (booleanos)
 INSERT INTO tipos_recursos (categoria, nombre, requiere_talla, requiere_cantidad, activo) VALUES
 -- EPP
-('EPP', 'Casco Forestal', 0, 1, 1),
-('EPP', 'Gafas de Protección', 0, 1, 1),
-('EPP', 'Mascarilla N95', 0, 1, 1),
-('EPP', 'Guantes de Trabajo', 1, 1, 1),
-('EPP', 'Botas Forestales', 1, 1, 1),
-('EPP', 'Pantalón Forestal', 1, 1, 1),
-('EPP', 'Camisa Forestal', 1, 1, 1),
-('EPP', 'Chaqueta Forestal', 1, 1, 1),
+('EPP', 'Casco Forestal', FALSE, TRUE, TRUE),
+('EPP', 'Gafas de Protección', FALSE, TRUE, TRUE),
+('EPP', 'Mascarilla N95', FALSE, TRUE, TRUE),
+('EPP', 'Guantes de Trabajo', TRUE, TRUE, TRUE),
+('EPP', 'Botas Forestales', TRUE, TRUE, TRUE),
+('EPP', 'Pantalón Forestal', TRUE, TRUE, TRUE),
+('EPP', 'Camisa Forestal', TRUE, TRUE, TRUE),
+('EPP', 'Chaqueta Forestal', TRUE, TRUE, TRUE),
 
 -- HERRAMIENTAS
-('HERRAMIENTAS', 'Pulaski', 0, 1, 1),
-('HERRAMIENTAS', 'McLeod', 0, 1, 1),
-('HERRAMIENTAS', 'Pala', 0, 1, 1),
-('HERRAMIENTAS', 'Hacha', 0, 1, 1),
-('HERRAMIENTAS', 'Motosierra', 0, 1, 1),
-('HERRAMIENTAS', 'Bomba de Agua Portátil', 0, 1, 1),
-('HERRAMIENTAS', 'Manguera Forestal', 0, 1, 1),
-('HERRAMIENTAS', 'Radio Comunicador', 0, 1, 1),
+('HERRAMIENTAS', 'Pulaski', FALSE, TRUE, TRUE),
+('HERRAMIENTAS', 'McLeod', FALSE, TRUE, TRUE),
+('HERRAMIENTAS', 'Pala', FALSE, TRUE, TRUE),
+('HERRAMIENTAS', 'Hacha', FALSE, TRUE, TRUE),
+('HERRAMIENTAS', 'Motosierra', FALSE, TRUE, TRUE),
+('HERRAMIENTAS', 'Bomba de Agua Portátil', FALSE, TRUE, TRUE),
+('HERRAMIENTAS', 'Manguera Forestal', FALSE, TRUE, TRUE),
+('HERRAMIENTAS', 'Radio Comunicador', FALSE, TRUE, TRUE),
 
 -- LOGISTICA
-('LOGISTICA', 'Combustible Diésel', 0, 1, 1),
-('LOGISTICA', 'Combustible Gasolina', 0, 1, 1),
-('LOGISTICA', 'Aceite para Motosierras', 0, 1, 1),
-('LOGISTICA', 'Repuestos Vehículos', 0, 1, 1),
+('LOGISTICA', 'Combustible Diésel', FALSE, TRUE, TRUE),
+('LOGISTICA', 'Combustible Gasolina', FALSE, TRUE, TRUE),
+('LOGISTICA', 'Aceite para Motosierras', FALSE, TRUE, TRUE),
+('LOGISTICA', 'Repuestos Vehículos', FALSE, TRUE, TRUE),
 
 -- ALIMENTACION
-('ALIMENTACION', 'Agua Embotellada', 0, 1, 1),
-('ALIMENTACION', 'Raciones de Comida', 0, 1, 1),
-('ALIMENTACION', 'Barras Energéticas', 0, 1, 1),
-('ALIMENTACION', 'Electrolitos', 0, 1, 1),
+('ALIMENTACION', 'Agua Embotellada', FALSE, TRUE, TRUE),
+('ALIMENTACION', 'Raciones de Comida', FALSE, TRUE, TRUE),
+('ALIMENTACION', 'Barras Energéticas', FALSE, TRUE, TRUE),
+('ALIMENTACION', 'Electrolitos', FALSE, TRUE, TRUE),
 
 -- CAMPO
-('CAMPO', 'Carpa', 0, 1, 1),
-('CAMPO', 'Saco de Dormir', 0, 1, 1),
-('CAMPO', 'Colchoneta', 0, 1, 1),
-('CAMPO', 'Linterna', 0, 1, 1),
+('CAMPO', 'Carpa', FALSE, TRUE, TRUE),
+('CAMPO', 'Saco de Dormir', FALSE, TRUE, TRUE),
+('CAMPO', 'Colchoneta', FALSE, TRUE, TRUE),
+('CAMPO', 'Linterna', FALSE, TRUE, TRUE),
 
 -- LIMPIEZA
-('LIMPIEZA', 'Jabón', 0, 1, 1),
-('LIMPIEZA', 'Desinfectante', 0, 1, 1),
-('LIMPIEZA', 'Papel Higiénico', 0, 1, 1),
-('LIMPIEZA', 'Toallas Húmedas', 0, 1, 1),
+('LIMPIEZA', 'Jabón', FALSE, TRUE, TRUE),
+('LIMPIEZA', 'Desinfectante', FALSE, TRUE, TRUE),
+('LIMPIEZA', 'Papel Higiénico', FALSE, TRUE, TRUE),
+('LIMPIEZA', 'Toallas Húmedas', FALSE, TRUE, TRUE),
 
 -- MEDICAMENTOS
-('MEDICAMENTOS', 'Kit Primeros Auxilios', 0, 1, 1),
-('MEDICAMENTOS', 'Analgésicos', 0, 1, 1),
-('MEDICAMENTOS', 'Vendas', 0, 1, 1),
-('MEDICAMENTOS', 'Suero Antiofídico', 0, 1, 1),
+('MEDICAMENTOS', 'Kit Primeros Auxilios', FALSE, TRUE, TRUE),
+('MEDICAMENTOS', 'Analgésicos', FALSE, TRUE, TRUE),
+('MEDICAMENTOS', 'Vendas', FALSE, TRUE, TRUE),
+('MEDICAMENTOS', 'Suero Antiofídico', FALSE, TRUE, TRUE),
 
 -- RESCATE ANIMAL
-('RESCATE_ANIMAL', 'Jaulas Transportadoras', 0, 1, 1),
-('RESCATE_ANIMAL', 'Guantes Especiales', 1, 1, 1),
-('RESCATE_ANIMAL', 'Mantas Ignífugas', 0, 1, 1),
-('RESCATE_ANIMAL', 'Kit Veterinario Básico', 0, 1, 1);
+('RESCATE_ANIMAL', 'Jaulas Transportadoras', FALSE, TRUE, TRUE),
+('RESCATE_ANIMAL', 'Guantes Especiales', TRUE, TRUE, TRUE),
+('RESCATE_ANIMAL', 'Mantas Ignífugas', FALSE, TRUE, TRUE),
+('RESCATE_ANIMAL', 'Kit Veterinario Básico', FALSE, TRUE, TRUE);
 
 -- Insertar datos de ejemplo en brigadas
 INSERT INTO brigadas (nombre, cantidad_bomberos_activos, contacto_celular_comandante, encargado_logistica, contacto_celular_logistica, numero_emergencia_publico) VALUES

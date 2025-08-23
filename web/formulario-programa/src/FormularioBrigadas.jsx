@@ -226,11 +226,19 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
 
  // Navegación
  const siguientePaso = () => {
-  setPasoActual((prev) => {
-   const nuevoPaso = prev + 1;
-   console.log("Paso actual:", nuevoPaso);
-   return nuevoPaso;
-  });
+  if (pasoActual < pasos.length - 1) {
+   const siguientePaso = pasoActual + 1;
+   const pasoInfo = pasos[siguientePaso];
+
+   setNextStepInfo({
+    currentStep: pasos[pasoActual],
+    nextStep: pasoInfo,
+    currentIndex: pasoActual,
+    nextIndex: siguientePaso,
+   });
+
+   setShowTransitionModal(true);
+  }
  };
  const pasoAnterior = () => {
   if (pasoActual > 0) {
@@ -426,6 +434,75 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
     </div>
    </div>
   );
+ };
+
+ // Modal de transición entre pasos
+ const ModalTransicion = () => {
+  if (!showTransitionModal || !nextStepInfo) return null;
+
+  const { currentStep, nextStep, nextIndex } = nextStepInfo;
+  const CurrentIcon = currentStep.icono;
+  const NextIcon = nextStep.icono;
+
+  return (
+   <div className="modal-overlay">
+    <div className="modal-container modal-transition">
+     <div className="modal-content">
+      <div className="modal-icon-container">
+       <div className="modal-icon modal-icon-transition">
+        <CurrentIcon className="modal-icon-current" />
+        <div className="modal-arrow">→</div>
+        <NextIcon className="modal-icon-next" />
+       </div>
+      </div>
+
+      <h3 className="modal-title">Cambiando de paso</h3>
+
+      <div className="modal-summary">
+       <div className="modal-summary-box">
+        <p>
+         <span className="modal-label">Paso actual:</span> {currentStep.label}
+        </p>
+        <p>
+         <span className="modal-label">Siguiente paso:</span> {nextStep.label}
+        </p>
+        <p>
+         <span className="modal-label">Progreso:</span> {nextIndex} de{" "}
+         {pasos.length}
+        </p>
+       </div>
+      </div>
+
+      <div className="modal-buttons">
+       <button
+        onClick={() => setShowTransitionModal(false)}
+        className="modal-btn modal-btn-cancel"
+       >
+        Cancelar
+       </button>
+
+       <button
+        onClick={confirmarCambioPaso}
+        className="modal-btn modal-btn-confirm"
+       >
+        Continuar
+       </button>
+      </div>
+     </div>
+    </div>
+   </div>
+  );
+ };
+
+ // Agregar este estado para el modal de transición
+ const [showTransitionModal, setShowTransitionModal] = useState(false);
+ const [nextStepInfo, setNextStepInfo] = useState(null);
+
+ // Función para confirmar el cambio de paso
+ const confirmarCambioPaso = () => {
+  setPasoActual((prev) => prev + 1);
+  setShowTransitionModal(false);
+  setNextStepInfo(null);
  };
 
  // Guardar inventario por categorías
@@ -1355,22 +1432,21 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
          <div className="review-section">
           <div className="review-notes">
            <div className="notes-header">
-            <AlertCircle className="icon icon-blue" />
+            <AlertCircle className="icon icon-orange" />
             <h4>Notas Importantes</h4>
            </div>
            <ul className="notes-list">
             <li>
-             • Verifique que toda la información esté correcta antes de guardar
+             Verifique que toda la información esté correcta antes de guardar
             </li>
             <li>
-             • Los recursos con cantidad 0 no se guardarán en el inventario
+             Los recursos con cantidad 0 no se guardarán en el inventario
             </li>
             <li>
-             • Puede regresar a cualquier paso anterior para hacer
-             modificaciones
+             Puede regresar a cualquier paso anterior para hacer modificaciones
             </li>
             <li>
-             • Una vez guardada, podrá editar esta información posteriormente
+             Una vez guardada, podrá editar esta información posteriormente
             </li>
            </ul>
           </div>
@@ -1401,21 +1477,20 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
        <p className="info-title">Instrucciones:</p>
        <ul className="info-list">
         <li>
-         • Complete la información básica de la brigada en la primera sección
+         Complete la información básica de la brigada en la primera sección
         </li>
         <li>
-         • Para equipos con tallas, especifique las cantidades por cada talla
+         Para equipos con tallas, especifique las cantidades por cada talla
          disponible
         </li>
-        <li>• Los recursos se cargan dinámicamente desde la base de datos</li>
-        <li>• Los campos con asterisco (*) son obligatorios</li>
-        <li>
-         • Los datos se guardan automáticamente al completar el formulario
-        </li>
+        <li>Los recursos se cargan dinámicamente desde la base de datos</li>
+        <li>Los campos con asterisco (*) son obligatorios</li>
+        <li>Los datos se guardan automáticamente al completar el formulario</li>
        </ul>
       </div>
      </div>
     </div>
+    <ModalTransicion />
     <ModalConfirmacion />
    </div>
   </div>

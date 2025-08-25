@@ -224,6 +224,29 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
   }));
  };
 
+ // Observación específica por talla
+ const actualizarObservacionPorTalla = (
+  categoria,
+  recurso,
+  tallaCodigo,
+  observacion
+ ) => {
+  setInventario((prev) => {
+   const recursoActual = prev[categoria]?.[recurso] || {};
+   const obsTallasActual = recursoActual.observaciones_tallas || {};
+   return {
+    ...prev,
+    [categoria]: {
+     ...prev[categoria],
+     [recurso]: {
+      ...recursoActual,
+      observaciones_tallas: { ...obsTallasActual, [tallaCodigo]: observacion },
+     },
+    },
+   };
+  });
+ };
+
  // Navegación
  const siguientePaso = () => {
   if (pasoActual < pasos.length - 1) {
@@ -440,9 +463,175 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
  const ModalTransicion = () => {
   if (!showTransitionModal || !nextStepInfo) return null;
 
-  const { currentStep, nextStep, nextIndex } = nextStepInfo;
+  const { currentStep, nextStep } = nextStepInfo;
   const CurrentIcon = currentStep.icono;
   const NextIcon = nextStep.icono;
+
+  // Función para generar el resumen del paso actual
+  const generarResumenPasoActual = () => {
+   if (currentStep.id === "brigada") {
+    // Resumen del paso de información de brigada (mostrar valores)
+    const camposConValores = [
+     { label: "Nombre de la brigada", value: brigada.nombre?.trim() },
+     {
+      label: "Cantidad de bomberos activos",
+      value: brigada.cantidad_bomberos_activos,
+     },
+     {
+      label: "Celular del comandante",
+      value: brigada.contacto_celular_comandante,
+     },
+     { label: "Encargado de logística", value: brigada.encargado_logistica },
+     {
+      label: "Celular de logística",
+      value: brigada.contacto_celular_logistica,
+     },
+     {
+      label: "Número de emergencia público",
+      value: brigada.numero_emergencia_publico,
+     },
+    ].filter((c) => c.value && String(c.value).trim() !== "");
+
+    if (camposConValores.length === 0) {
+     return "No se ha ingresado información en este paso";
+    }
+
+    return (
+     <div className="modal-resumen-paso">
+      <div className="modal-resumen-header">
+       <span className="modal-resumen-title">Información ingresada:</span>
+      </div>
+      <div className="modal-resumen-items">
+       {camposConValores.map((campo, index) => (
+        <div key={index} className="modal-resumen-item">
+         <Check className="icon-sm icon-green" />
+         <div className="modal-resumen-recurso">
+          <span className="modal-resumen-nombre">{campo.label}</span>
+          <span className="modal-resumen-valor">{campo.value}</span>
+         </div>
+        </div>
+       ))}
+      </div>
+     </div>
+    );
+   } else {
+    // Resumen del inventario del paso actual
+    const categoria = currentStep.id;
+    const recursos = inventario[categoria] || {};
+
+    // Filtrar recursos que tienen cantidades
+    const recursosConCantidades = Object.entries(recursos).filter(
+     ([, datos]) => {
+      if (datos.cantidad && datos.cantidad > 0) return true;
+      return Object.entries(datos).some(
+       ([key, valor]) =>
+        key !== "observaciones" && typeof valor === "number" && valor > 0
+      );
+     }
+    );
+
+    if (recursosConCantidades.length === 0) {
+     return (
+      <div className="warning-container">
+       <span className="warning-icon">⚠️</span>
+       <span className="warning-text">
+        No se han configurado recursos en este paso.
+        <span className="warning-highlight">
+         ¡Por favor, selecciona al menos uno!
+        </span>
+       </span>
+      </div>
+     );
+    }
+
+    return (
+     <div className="modal-resumen-paso">
+      <div className="modal-resumen-header">
+       <span className="modal-resumen-title">Recursos configurados:</span>
+       <span className="modal-resumen-count">
+        {recursosConCantidades.length} recurso
+        {recursosConCantidades.length !== 1 ? "s" : ""}
+       </span>
+      </div>
+      <div className="modal-resumen-items">
+       {recursosConCantidades.map(([nombreRecurso, datos]) => {
+        const tieneQuantity = datos.cantidad !== undefined;
+        let cantidadTotal = 0;
+        let detalles = "";
+
+        if (tieneQuantity) {
+         cantidadTotal = datos.cantidad;
+         detalles = `${cantidadTotal} unidades`;
+        } else {
+         // Calcular total de tallas
+         cantidadTotal = Object.entries(datos)
+          .filter(
+           ([key]) => key !== "observaciones" && key !== "observaciones_tallas"
+          )
+          .reduce(
+           (sum, [, val]) => sum + (typeof val === "number" ? val : 0),
+           0
+          );
+
+         const tallasConCantidad = Object.entries(datos)
+          .filter(
+           ([key, val]) =>
+            key !== "observaciones" &&
+            key !== "observaciones_tallas" &&
+            typeof val === "number" &&
+            val > 0
+          )
+          .map(([talla, cant]) => `${talla}: ${cant}`)
+          .join(", ");
+
+         detalles = tallasConCantidad
+          ? `${cantidadTotal} unidades (${tallasConCantidad})`
+          : `${cantidadTotal} unidades`;
+        }
+
+        return (
+         <div key={nombreRecurso} className="modal-resumen-item">
+          <Package className="icon-sm icon-blue" />
+          <div className="modal-resumen-recurso">
+           <span className="modal-resumen-nombre">{nombreRecurso}</span>
+           <span className="modal-resumen-cantidad">{detalles}</span>
+           {datos.observaciones && datos.observaciones.trim() && (
+            <div className="modal-resumen-observaciones">
+             <div className="modal-resumen-observaciones-header">
+              <MessageSquare className="icon-sm" />
+              <span>Observaciones</span>
+             </div>
+             <p className="modal-resumen-observaciones-text">
+              {datos.observaciones}
+             </p>
+            </div>
+           )}
+           {datos.observaciones_tallas && (
+            <div className="modal-resumen-observaciones">
+             <div className="modal-resumen-observaciones-header">
+              <MessageSquare className="icon-sm" />
+              <span>Observaciones por talla</span>
+             </div>
+             <ul className="modal-resumen-observaciones-list">
+              {Object.entries(datos.observaciones_tallas)
+               .filter(([, txt]) => typeof txt === "string" && txt.trim())
+               .map(([talla, txt]) => (
+                <li key={talla} className="modal-resumen-observaciones-item">
+                 <span className="size-label">{talla}:</span> {txt}
+                </li>
+               ))}
+             </ul>
+            </div>
+           )}
+          </div>
+         </div>
+        );
+       })}
+      </div>
+     </div>
+    );
+   }
+  };
 
   return (
    <div className="modal-overlay">
@@ -457,21 +646,28 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
       </div>
 
       <h3 className="modal-title">Cambiando de paso</h3>
+      <p className="modal-label">
+       {" "}
+       Estas seguro de seguir con esta informacion para la creacion de tu
+       Brigada?
+      </p>
 
       <div className="modal-summary">
        <div className="modal-summary-box">
         <p>
-         <span className="modal-label">Paso actual:</span> {currentStep.label}
+         <span className="modal-label">Yendo del paso</span> {currentStep.label}
+         <span style={{ paddingRight: "var(--space-sm)" }}></span>
+         <span className="modal-label">al paso</span> {nextStep.label}
         </p>
-        <p>
-         <span className="modal-label">Siguiente paso:</span> {nextStep.label}
-        </p>
-        <p>
+        {/* <p>
          <span className="modal-label">Progreso:</span> {nextIndex} de{" "}
          {pasos.length}
-        </p>
+        </p> */}
        </div>
       </div>
+
+      {/* Resumen del paso actual */}
+      {generarResumenPasoActual()}
 
       <div className="modal-buttons">
        <button
@@ -480,7 +676,6 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
        >
         Cancelar
        </button>
-
        <button
         onClick={confirmarCambioPaso}
         className="modal-btn modal-btn-confirm"
@@ -519,18 +714,28 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
     );
     if (!tipoRecurso) continue;
 
-    const observaciones = datos.observaciones || "";
+    const observacionesGenerales = datos.observaciones || "";
 
     if (tipoRecurso.requiere_talla) {
      // Guardar por cada talla
      for (const [talla, cantidad] of Object.entries(datos)) {
-      if (talla !== "cantidad" && talla !== "observaciones" && cantidad > 0) {
+      if (
+       talla !== "cantidad" &&
+       talla !== "observaciones" &&
+       talla !== "observaciones_tallas" &&
+       cantidad > 0
+      ) {
        const tallaObj = tallas.find((t) => t.codigo === talla);
        if (tallaObj) {
         // Usar la categoría real del tipoRecurso, no hardcodear EPP
         const categoriaReal = tipoRecurso.categoria
          .toLowerCase()
          .replace("_", "-");
+
+        // Observación específica por talla o fallback a general
+        const observacionPorTalla =
+         datos.observaciones_tallas?.[talla] || observacionesGenerales;
+
         await apiCall(`/inventario/${categoriaReal}`, {
          method: "POST",
          body: JSON.stringify({
@@ -538,7 +743,7 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
           tipo_recurso_id: tipoRecurso.id,
           talla_id: tallaObj.id,
           cantidad: cantidad,
-          observaciones: observaciones,
+          observaciones: observacionPorTalla,
          }),
         });
         await sleep(80);
@@ -559,7 +764,7 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
         brigada_id: brigadaIdParam,
         tipo_recurso_id: tipoRecurso.id,
         cantidad: datos.cantidad,
-        observaciones: observaciones,
+        observaciones: observacionesGenerales,
        }),
       });
       await sleep(80);
@@ -636,10 +841,33 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
   );
   if (!tipoRecurso) return null;
 
+  // Autoajuste de altura para textareas compactos
+  const handleAutoResize = (e) => {
+   const el = e.target;
+   el.style.height = "auto";
+   el.style.height = `${el.scrollHeight}px`;
+  };
+
+  // Total de cantidades asignadas en tallas
+  const totalTallas = Object.entries(inventario[categoria]?.[recurso] || {})
+   .filter(
+    ([key, val]) =>
+     key !== "observaciones" &&
+     key !== "observaciones_tallas" &&
+     typeof val === "number"
+   )
+   .reduce((sum, [, val]) => sum + (parseInt(val) || 0), 0);
+
+  const observacionGeneralHabilitada = totalTallas > 0;
+
   return (
    <div className="resource-content">
     {/* Titulo de Tallas */}
     <h3 className="tallas-title">Tallas</h3>
+    <p className="talla-label">
+     Por favor, poner al menos 1 en cantidad para añadir observacion al recurso
+     correspondiente.
+    </p>
     <div className="tallas-grid">
      {tallas.map((talla) => (
       <div key={talla.codigo} className="talla-group">
@@ -657,6 +885,78 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
       </div>
      ))}
     </div>
+
+    {/* Panel de observaciones por talla (sin hooks) */}
+    <details className="tallas-obs-panel">
+     <summary className="tallas-obs-toggle">
+      <span>Observaciones por talla</span>
+      <svg
+       className="tallas-obs-arrow"
+       fill="none"
+       stroke="currentColor"
+       viewBox="0 0 24 24"
+      >
+       <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M19 9l-7 7-7-7"
+       />
+      </svg>
+     </summary>
+     <div className="tallas-obs-list">
+      {tallas.map((talla) => (
+       <div key={talla.codigo} className="tallas-obs-row">
+        <span className="tallas-obs-size">{talla.codigo}</span>
+        <textarea
+         rows="1"
+         className="tallas-obs-input"
+         placeholder={`Observación para ${talla.codigo}`}
+         value={
+          (inventario[categoria]?.[recurso]?.[talla.codigo] || 0) > 0
+           ? inventario[categoria]?.[recurso]?.observaciones_tallas?.[
+              talla.codigo
+             ] || ""
+           : ""
+         }
+         onChange={(e) =>
+          actualizarObservacionPorTalla(
+           categoria,
+           recurso,
+           talla.codigo,
+           e.target.value
+          )
+         }
+         onInput={handleAutoResize}
+         style={{ height: "28px" }}
+         disabled={
+          !((inventario[categoria]?.[recurso]?.[talla.codigo] || 0) > 0)
+         }
+        />
+       </div>
+      ))}
+     </div>
+    </details>
+
+    {/* Observación general opcional */}
+    <div className="observaciones-container">
+     <div className="observaciones-header">
+      <MessageSquare className="icon-sm" />
+      <label className="observaciones-label">
+       Observación general (opcional):
+      </label>
+     </div>
+     <textarea
+      className="observaciones-input"
+      placeholder="Comentarios generales sobre este recurso para todas las tallas..."
+      rows="2"
+      value={inventario[categoria]?.[recurso]?.observaciones || ""}
+      onChange={(e) =>
+       actualizarInventario(categoria, recurso, "observaciones", e.target.value)
+      }
+      disabled={!observacionGeneralHabilitada}
+     />
+    </div>
    </div>
   );
  };
@@ -671,6 +971,7 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
 
   const numbers = Array.from({ length: 101 }, (_, i) => i);
   const currentValue = inventario[categoria]?.[recurso]?.cantidad || 0;
+  const observacionHabilitada = currentValue > 0;
 
   // Sincronizar el estado local con el valor del inventario
   React.useEffect(() => {
@@ -853,6 +1154,7 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
         observacionLocal
        );
       }}
+      disabled={!observacionHabilitada}
      />
     </div>
 
@@ -986,6 +1288,8 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
 
      {/* Navegación por pestañas */}
      <div className="nav-container">
+      <div className="nav-title">Navegación por pasos:</div>
+
       <div className="nav-tabs">
        {pasos.map((item, index) => {
         const IconComponent = item.icono;
@@ -1003,6 +1307,7 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
         );
        })}
       </div>
+      <div>{/* Completa todos los pasos para crear tu brigada digital */}</div>
      </div>
 
      {/* Navegación por pasos */}
@@ -1366,7 +1671,9 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
                     {Object.entries(datos)
                      .filter(
                       ([key, cantidad]) =>
-                       key !== "observaciones" && cantidad > 0
+                       key !== "observaciones" &&
+                       key !== "observaciones_tallas" &&
+                       cantidad > 0
                      )
                      .map(([talla, cantidad]) => (
                       <div key={talla} className="size-item">
@@ -1379,7 +1686,11 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
                     <span className="total-label">Total:</span>
                     <span className="total-number">
                      {Object.entries(datos)
-                      .filter(([key]) => key !== "observaciones")
+                      .filter(
+                       ([key]) =>
+                        key !== "observaciones" &&
+                        key !== "observaciones_tallas"
+                      )
                       .reduce(
                        (sum, [, val]) =>
                         sum + (typeof val === "number" ? val : 0),
@@ -1388,6 +1699,30 @@ const FormularioBrigadas = ({ brigadaId = null, onSuccess = () => {} }) => {
                      unidades
                     </span>
                    </div>
+                   {datos.observaciones_tallas && (
+                    <div className="observaciones-review">
+                     <div className="observaciones-review-header">
+                      <MessageSquare className="icon-sm" />
+                      <span className="observaciones-review-label">
+                       Observaciones por talla:
+                      </span>
+                     </div>
+                     <ul className="observaciones-por-talla-list">
+                      {Object.entries(datos.observaciones_tallas)
+                       .filter(
+                        ([, txt]) => typeof txt === "string" && txt.trim()
+                       )
+                       .map(([talla, txt]) => (
+                        <li
+                         key={talla}
+                         className="observaciones-por-talla-item"
+                        >
+                         <span className="size-label">{talla}:</span> {txt}
+                        </li>
+                       ))}
+                     </ul>
+                    </div>
+                   )}
                   </div>
                  )}
 
